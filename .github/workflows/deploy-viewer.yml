@@ -17,9 +17,7 @@ jobs:
       - name: Prepare deployment package
         run: |
           mkdir -p deploy
-          cp index.html deploy/
-          cp api.php deploy/
-          cp videos.json deploy/
+          cp * deploy/
 
       - name: Install lftp
         run: sudo apt-get install -y lftp
