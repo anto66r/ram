@@ -1,3 +1,36 @@
+function resizeImage(dataUrl, maxW = 640) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.src = dataUrl;
+  });
+}
+
+async function handlePasteEvent(e) {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      const reader = new FileReader();
+      reader.onload = async ev => {
+        const resized = await resizeImage(ev.target.result);
+        setCover(resized);
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+  }
+}
+
 let apiUrl = '';
 let apiUser = '';
 let apiPass = '';
@@ -78,7 +111,8 @@ function renderTags() {
     const el = document.createElement('label');
     el.className = `tag-check${selectedTags.has(label) ? ' checked' : ''}`;
     el.innerHTML = `<input type="checkbox" />${label}`;
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
       selectedTags.has(label) ? selectedTags.delete(label) : selectedTags.add(label);
       el.classList.toggle('checked', selectedTags.has(label));
     });
@@ -182,6 +216,12 @@ async function init() {
   $('add-btn').addEventListener('click', addVideo);
   $('clear-cover').addEventListener('click', () => setCover(null));
   $('url').addEventListener('keydown', e => { if (e.key === 'Enter') addVideo(); });
+
+  // Paste cover image
+  const placeholder = $('cover-placeholder');
+  placeholder.addEventListener('click', () => placeholder.focus());
+  placeholder.addEventListener('paste', handlePasteEvent);
+  document.addEventListener('paste', handlePasteEvent);
 }
 
 document.addEventListener('DOMContentLoaded', init);

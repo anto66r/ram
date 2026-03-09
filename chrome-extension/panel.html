@@ -82,6 +82,13 @@
       color: #444;
       font-size: 0.78rem;
       margin-bottom: 14px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .cover-placeholder:focus, .cover-placeholder:hover {
+      border-color: #3b82f6;
+      color: #888;
     }
 
     .tags-list { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -155,7 +162,7 @@
       <img id="cover-img" alt="cover" />
       <button class="cover-clear" id="clear-cover">Remove image</button>
     </div>
-    <div id="cover-placeholder" class="cover-placeholder">No cover image</div>
+    <div id="cover-placeholder" class="cover-placeholder" tabindex="0">Click then ⌘V / Ctrl+V to paste</div>
 
     <div class="field">
       <label>Tags</label>
