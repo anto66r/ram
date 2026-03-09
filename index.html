@@ -459,7 +459,17 @@
       const [selectedTags, setSelectedTags] = useState([]);
       const [cover, setCover] = useState(null);
       const [loading, setLoading] = useState(false);
+      const [fetching, setFetching] = useState(false);
       const [error, setError] = useState('');
+
+      const handleFetch = async () => {
+        const trimmed = url.trim();
+        if (!trimmed) return;
+        setFetching(true);
+        const res = await apiFetch({ action: 'fetch_meta', url: trimmed });
+        if (res.cover) setCover(res.cover);
+        setFetching(false);
+      };
 
       const toggleTag = (tag) =>
         setSelectedTags(prev =>
@@ -495,14 +505,20 @@
             <h2>Add Video</h2>
             <div className="field">
               <label>URL</label>
-              <input
-                type="url"
-                placeholder="https://..."
-                value={url}
-                onChange={e => setUrl(e.target.value)}
-                onKeyDown={handleKey}
-                autoFocus
-              />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  type="url"
+                  placeholder="https://..."
+                  value={url}
+                  onChange={e => setUrl(e.target.value)}
+                  onKeyDown={handleKey}
+                  autoFocus
+                  style={{ flex: 1 }}
+                />
+                <button className="btn btn-secondary btn-sm" onClick={handleFetch} disabled={fetching || !url.trim()}>
+                  {fetching ? <span className="spinner" /> : 'Fetch'}
+                </button>
+              </div>
             </div>
             <PasteZone cover={cover} onCover={setCover} />
             <TagSelector
