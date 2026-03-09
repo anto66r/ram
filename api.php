@@ -132,6 +132,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['error' => 'URL is required']);
             exit;
         }
+        foreach ($data['videos'] as $existing) {
+            if (rtrim($existing['url'], '/') === rtrim($url, '/')) {
+                http_response_code(409);
+                echo json_encode(['error' => 'This video is already in your library: ' . ($existing['title'] ?? $url)]);
+                exit;
+            }
+        }
         $coverData = $body['cover_data'] ?? null;
         $info = fetchVideoInfo($url);
         $video = [
