@@ -36,17 +36,36 @@ function curlGet($url) {
     return $result ?: null;
 }
 
+function downloadImageAsBase64($url) {
+    if (!$url) return null;
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; VideoLibrary/1.0)',
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+    $data = curl_exec($ch);
+    $mime = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    curl_close($ch);
+    if (!$data) return null;
+    $mime = explode(';', $mime)[0];
+    if (!str_starts_with($mime, 'image/')) return null;
+    return 'data:' . $mime . ';base64,' . base64_encode($data);
+}
+
 function fetchVideoInfo($url) {
     $info = ['cover' => null, 'title' => null];
 
     // YouTube
     if (preg_match('/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/', $url, $m)) {
         $videoId = $m[1];
-        $info['cover'] = "https://img.youtube.com/vi/{$videoId}/hqdefault.jpg";
         $oembed = @json_decode(curlGet(
             "https://www.youtube.com/oembed?url=" . urlencode($url) . "&format=json"
         ), true);
         $info['title'] = $oembed['title'] ?? null;
+        $info['cover'] = downloadImageAsBase64("https://img.youtube.com/vi/{$videoId}/hqdefault.jpg");
         return $info;
     }
 
@@ -55,8 +74,8 @@ function fetchVideoInfo($url) {
         $oembed = @json_decode(curlGet(
             "https://vimeo.com/api/oembed.json?url=" . urlencode($url)
         ), true);
-        $info['cover'] = $oembed['thumbnail_url'] ?? null;
         $info['title'] = $oembed['title'] ?? null;
+        $info['cover'] = downloadImageAsBase64($oembed['thumbnail_url'] ?? null);
         return $info;
     }
 
@@ -75,7 +94,7 @@ function fetchVideoInfo($url) {
                 $base = $parsed['scheme'] . '://' . $parsed['host'];
                 $imageUrl = $base . '/' . ltrim($imageUrl, '/');
             }
-            $info['cover'] = $imageUrl;
+            $info['cover'] = downloadImageAsBase64($imageUrl);
         }
         // og:title
         if (preg_match('/<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']/', $html, $m) ||
