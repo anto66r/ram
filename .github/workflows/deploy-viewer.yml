@@ -4,49 +4,30 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'viewer/**'
-      - '.github/workflows/deploy-viewer.yml'
 
 jobs:
   deploy:
-    name: Build and deploy viewer
+    name: Deploy to server
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: viewer/package-lock.json
-
-      - name: Install viewer dependencies
-        run: npm ci
-        working-directory: viewer
-
-      - name: Build viewer
-        run: npm run build
-        working-directory: viewer
-
       - name: Prepare deployment package
         run: |
           mkdir -p deploy
-          cp -r index.html deploy/
-          cp -r api.php deploy/
-          cp -r videos.json deploy/
+          cp index.html deploy/
+          cp api.php deploy/
+          cp videos.json deploy/
 
       - name: Install lftp
         run: sudo apt-get install -y lftp
 
-      - name: Deploy to Hostinger via FTP
+      - name: Deploy via FTP
         env:
           FTP_HOST: ${{ secrets.FTP_HOST }}
           FTP_USER: ${{ secrets.FTP_USER }}
           FTP_PASS: ${{ secrets.FTP_PASS }}
         run: |
           lftp -u "$FTP_USER,$FTP_PASS" -e "set ftp:ssl-allow no; set ftp:passive-mode on; set ftp:use-pasv-address false; set net:timeout 30; set net:max-retries 2; mirror --reverse --verbose ./deploy/ /; quit" ftp://$FTP_HOST
-
