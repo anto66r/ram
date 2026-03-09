@@ -63,10 +63,19 @@ function fetchVideoInfo($url) {
     // Generic: parse og:image and og:title
     $html = curlGet($url);
     if ($html) {
-        // og:image
-        if (preg_match('/<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']/', $html, $m) ||
-            preg_match('/<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']/', $html, $m)) {
-            $info['cover'] = $m[1];
+        // og:image — handle any quote style and attribute order
+        if (preg_match('/<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\'][^>]*\/?>/i', $html, $m) ||
+            preg_match('/<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\'][^>]*\/?>/i', $html, $m) ||
+            preg_match('/property=["\']og:image["\']\s+content=["\'](https?:\/\/[^"\']+)["\']/', $html, $m) ||
+            preg_match('/content=["\'](https?:\/\/[^"\']+)["\'][^>]+property=["\']og:image["\']/', $html, $m)) {
+            $imageUrl = $m[1];
+            // resolve relative URLs
+            if (!preg_match('/^https?:\/\//', $imageUrl)) {
+                $parsed = parse_url($url);
+                $base = $parsed['scheme'] . '://' . $parsed['host'];
+                $imageUrl = $base . '/' . ltrim($imageUrl, '/');
+            }
+            $info['cover'] = $imageUrl;
         }
         // og:title
         if (preg_match('/<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']/', $html, $m) ||
