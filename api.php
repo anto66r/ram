@@ -36,6 +36,32 @@ function curlGet($url) {
     return $result ?: null;
 }
 
+function ensureImagesDir() {
+    $dir = __DIR__ . '/images';
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+    return $dir;
+}
+
+function saveImageAsJpg($imageData, $id) {
+    $dir = ensureImagesDir();
+    $img = @imagecreatefromstring($imageData);
+    if (!$img) return null;
+    $path = "images/{$id}.jpg";
+    imagejpeg($img, $dir . "/{$id}.jpg", 85);
+    imagedestroy($img);
+    return $path;
+}
+
+function saveBase64AsJpg($base64, $id) {
+    if (!$base64) return null;
+    if (preg_match('/^data:image\/[^;]+;base64,(.+)$/', $base64, $m)) {
+        $data = base64_decode($m[1]);
+    } else {
+        return null;
+    }
+    return saveImageAsJpg($data, $id);
+}
+
 function downloadImageAsBase64($url) {
     if (!$url) return null;
     $ch = curl_init($url);
@@ -55,8 +81,26 @@ function downloadImageAsBase64($url) {
     return 'data:' . $mime . ';base64,' . base64_encode($data);
 }
 
-function fetchVideoInfo($url) {
+function downloadImageAsJpg($url, $id) {
+    $base64 = downloadImageAsBase64($url);
+    if (!$base64) return null;
+    return saveBase64AsJpg($base64, $id);
+}
+
+function deleteImageFile($cover) {
+    if ($cover && str_starts_with($cover, 'images/')) {
+        $file = __DIR__ . '/' . $cover;
+        if (file_exists($file)) unlink($file);
+    }
+}
+
+function fetchVideoInfo($url, $id = null) {
     $info = ['cover' => null, 'title' => null];
+
+    $saveOrBase64 = function($imageUrl) use ($id) {
+        if ($id) return downloadImageAsJpg($imageUrl, $id);
+        return downloadImageAsBase64($imageUrl);
+    };
 
     // YouTube
     if (preg_match('/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/', $url, $m)) {
@@ -65,7 +109,7 @@ function fetchVideoInfo($url) {
             "https://www.youtube.com/oembed?url=" . urlencode($url) . "&format=json"
         ), true);
         $info['title'] = $oembed['title'] ?? null;
-        $info['cover'] = downloadImageAsBase64("https://img.youtube.com/vi/{$videoId}/hqdefault.jpg");
+        $info['cover'] = $saveOrBase64("https://img.youtube.com/vi/{$videoId}/hqdefault.jpg");
         return $info;
     }
 
@@ -75,7 +119,7 @@ function fetchVideoInfo($url) {
             "https://vimeo.com/api/oembed.json?url=" . urlencode($url)
         ), true);
         $info['title'] = $oembed['title'] ?? null;
-        $info['cover'] = downloadImageAsBase64($oembed['thumbnail_url'] ?? null);
+        $info['cover'] = $saveOrBase64($oembed['thumbnail_url'] ?? null);
         return $info;
     }
 
@@ -94,7 +138,7 @@ function fetchVideoInfo($url) {
                 $base = $parsed['scheme'] . '://' . $parsed['host'];
                 $imageUrl = $base . '/' . ltrim($imageUrl, '/');
             }
-            $info['cover'] = downloadImageAsBase64($imageUrl);
+            $info['cover'] = $saveOrBase64($imageUrl);
         }
         // og:title
         if (preg_match('/<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']/', $html, $m) ||
@@ -139,10 +183,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             }
         }
+        $id = uniqid('v_', true);
         $coverData = $body['cover_data'] ?? null;
-        $info = fetchVideoInfo($url);
+        // If cover_data is base64 from browser, save to disk
+        if ($coverData && str_starts_with($coverData, 'data:')) {
+            $coverData = saveBase64AsJpg($coverData, $id) ?: $coverData;
+        }
+        $info = fetchVideoInfo($url, $coverData ? null : $id);
         $video = [
-            'id'         => uniqid('v_', true),
+            'id'         => $id,
             'url'        => $url,
             'title'      => $info['title'] ?? $url,
             'cover'      => $coverData ?: $info['cover'],
@@ -156,6 +205,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     } elseif ($postAction === 'delete') {
         $id = $body['id'] ?? '';
+        foreach ($data['videos'] as $v) {
+            if ($v['id'] === $id) { deleteImageFile($v['cover'] ?? null); break; }
+        }
         $data['videos'] = array_values(array_filter($data['videos'], fn($v) => $v['id'] !== $id));
         saveData($dataFile, $data);
         echo json_encode(['success' => true]);
@@ -198,9 +250,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $id = $body['id'] ?? '';
         foreach ($data['videos'] as &$video) {
             if ($video['id'] === $id) {
-                $video['url']    = trim($body['url'] ?? $video['url']);
-                $video['title']  = trim($body['title'] ?? $video['title']);
-                $video['cover']  = array_key_exists('cover', $body) ? $body['cover'] : $video['cover'];
+                $video['url']   = trim($body['url'] ?? $video['url']);
+                $video['title'] = trim($body['title'] ?? $video['title']);
+                if (array_key_exists('cover', $body)) {
+                    $newCover = $body['cover'];
+                    // Save new base64 cover to disk, delete old file if replacing
+                    if ($newCover && str_starts_with($newCover, 'data:')) {
+                        deleteImageFile($video['cover'] ?? null);
+                        $newCover = saveBase64AsJpg($newCover, $id) ?: $newCover;
+                    } elseif (!$newCover) {
+                        deleteImageFile($video['cover'] ?? null);
+                    }
+                    $video['cover'] = $newCover;
+                }
                 $video['tags']   = array_values(array_unique($body['tags'] ?? $video['tags']));
                 $video['rating'] = array_key_exists('rating', $body) ? max(0, min(5, (int)$body['rating'])) : ($video['rating'] ?? 0);
                 break;
@@ -220,6 +282,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         saveData($dataFile, $data);
         echo json_encode(['success' => true]);
+
+    } elseif ($postAction === 'migrate_images') {
+        ensureImagesDir();
+        $migrated = 0;
+        $failed = 0;
+        foreach ($data['videos'] as &$video) {
+            $cover = $video['cover'] ?? null;
+            if (!$cover || !str_starts_with($cover, 'data:')) continue;
+            $path = saveBase64AsJpg($cover, $video['id']);
+            if ($path) {
+                $video['cover'] = $path;
+                $migrated++;
+            } else {
+                $failed++;
+            }
+        }
+        unset($video);
+        saveData($dataFile, $data);
+        echo json_encode(['success' => true, 'migrated' => $migrated, 'failed' => $failed]);
 
     } else {
         http_response_code(400);
