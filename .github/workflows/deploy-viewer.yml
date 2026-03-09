@@ -16,8 +16,8 @@ jobs:
 
       - name: Prepare deployment package
         run: |
-          mkdir -p deploy
-          cp -r * deploy/
+          mkdir -p /tmp/deploy
+          cp -r * /tmp/deploy/
 
       - name: Install lftp
         run: sudo apt-get install -y lftp
@@ -28,4 +28,4 @@ jobs:
           FTP_USER: ${{ secrets.FTP_USER }}
           FTP_PASS: ${{ secrets.FTP_PASS }}
         run: |
-          lftp -u "$FTP_USER,$FTP_PASS" -e "set ftp:ssl-allow no; set ftp:passive-mode on; set ftp:use-pasv-address false; set net:timeout 30; set net:max-retries 2; mirror --reverse --verbose ./deploy/ /; quit" ftp://$FTP_HOST
+          lftp -u "$FTP_USER,$FTP_PASS" -e "set ftp:ssl-allow no; set ftp:passive-mode on; set ftp:use-pasv-address false; set net:timeout 30; set net:max-retries 2; mirror --reverse --verbose /tmp/deploy/ /; quit" ftp://$FTP_HOST
