@@ -344,6 +344,52 @@
       return <div className={`toast${type === 'error' ? ' error' : ''}`}>{msg}</div>;
     }
 
+    // ── Tag Selector ──────────────────────────────────────────────────────────
+    function TagSelector({ labels, selected, onToggle, onLabelAdded }) {
+      const [newTag, setNewTag] = useState('');
+
+      const handleCreate = async () => {
+        const trimmed = newTag.trim();
+        if (!trimmed || labels.includes(trimmed)) { setNewTag(''); return; }
+        const res = await apiFetch({ action: 'add_label', label: trimmed });
+        if (res.success) {
+          onLabelAdded(res.labels);
+          onToggle(trimmed); // auto-select
+          setNewTag('');
+        }
+      };
+
+      const handleKey = (e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreate(); } };
+
+      return (
+        <div className="field">
+          <label>Tags</label>
+          <div className="tag-list" style={{ marginBottom: 8 }}>
+            {labels.map(label => (
+              <label key={label} className={`tag-check ${selected.includes(label) ? 'checked' : ''}`}>
+                <input type="checkbox" checked={selected.includes(label)} onChange={() => onToggle(label)} />
+                {label}
+              </label>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              type="text"
+              placeholder="New tag…"
+              value={newTag}
+              onChange={e => setNewTag(e.target.value)}
+              onKeyDown={handleKey}
+              style={{
+                flex: 1, padding: '6px 10px', background: '#111', border: '1px solid #333',
+                borderRadius: 6, color: '#eee', fontSize: '0.82rem', outline: 'none',
+              }}
+            />
+            <button className="btn btn-secondary btn-sm" onClick={handleCreate}>Add</button>
+          </div>
+        </div>
+      );
+    }
+
     // ── Add Video Modal ───────────────────────────────────────────────────────
     function PasteZone({ cover, onCover }) {
       const handlePaste = async (e) => {
@@ -378,8 +424,9 @@
       );
     }
 
-    function AddVideoModal({ labels, onClose, onAdded }) {
+    function AddVideoModal({ labels, onClose, onAdded, onLabelAdded }) {
       const [url, setUrl] = useState('');
+      const [localLabels, setLocalLabels] = useState(labels);
       const [selectedTags, setSelectedTags] = useState([]);
       const [cover, setCover] = useState(null);
       const [loading, setLoading] = useState(false);
@@ -389,6 +436,8 @@
         setSelectedTags(prev =>
           prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
         );
+
+      const handleLabelAdded = (updated) => { setLocalLabels(updated); onLabelAdded(updated); };
 
       const handleAdd = async () => {
         const trimmed = url.trim();
@@ -427,23 +476,12 @@
               />
             </div>
             <PasteZone cover={cover} onCover={setCover} />
-            {labels.length > 0 && (
-              <div className="field">
-                <label>Tags</label>
-                <div className="tag-list">
-                  {labels.map(label => (
-                    <label key={label} className={`tag-check ${selectedTags.includes(label) ? 'checked' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={selectedTags.includes(label)}
-                        onChange={() => toggleTag(label)}
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
+            <TagSelector
+              labels={localLabels}
+              selected={selectedTags}
+              onToggle={toggleTag}
+              onLabelAdded={handleLabelAdded}
+            />
             {error && <p style={{ color: '#f87171', fontSize: '0.82rem', marginBottom: 8 }}>{error}</p>}
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
@@ -458,7 +496,8 @@
     }
 
     // ── Edit Tags Modal ───────────────────────────────────────────────────────
-    function EditTagsModal({ video, labels, onClose, onSaved }) {
+    function EditTagsModal({ video, labels, onClose, onSaved, onLabelAdded }) {
+      const [localLabels, setLocalLabels] = useState(labels);
       const [selectedTags, setSelectedTags] = useState(video.tags || []);
       const [saving, setSaving] = useState(false);
 
@@ -466,6 +505,8 @@
         setSelectedTags(prev =>
           prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
         );
+
+      const handleLabelAdded = (updated) => { setLocalLabels(updated); onLabelAdded(updated); };
 
       const handleSave = async () => {
         setSaving(true);
@@ -479,22 +520,12 @@
         <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
           <div className="modal">
             <h2>Edit Tags — <span style={{ color: '#888', fontWeight: 400, fontSize: '0.9rem' }}>{video.title}</span></h2>
-            {labels.length === 0
-              ? <p style={{ color: '#666', fontSize: '0.85rem' }}>No labels yet. Add some in Manage Labels.</p>
-              : (
-                <div className="tag-list">
-                  {labels.map(label => (
-                    <label key={label} className={`tag-check ${selectedTags.includes(label) ? 'checked' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={selectedTags.includes(label)}
-                        onChange={() => toggleTag(label)}
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              )}
+            <TagSelector
+              labels={localLabels}
+              selected={selectedTags}
+              onToggle={toggleTag}
+              onLabelAdded={handleLabelAdded}
+            />
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>Save</button>
@@ -738,6 +769,7 @@
               labels={labels}
               onClose={() => setModal(null)}
               onAdded={handleAdded}
+              onLabelAdded={setLabels}
             />
           )}
           {modal === 'labels' && (
@@ -753,6 +785,7 @@
               labels={labels}
               onClose={() => setModal(null)}
               onSaved={handleTagsSaved}
+              onLabelAdded={setLabels}
             />
           )}
           {modal && modal.type === 'setCover' && (
