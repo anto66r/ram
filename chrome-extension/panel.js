@@ -1,22 +1,42 @@
 let apiUrl = '';
+let apiUser = '';
+let apiPass = '';
 let coverData = null;
 let selectedTags = new Set();
 let labels = [];
 
 const $ = id => document.getElementById(id);
 
-async function getApiUrl() {
+async function loadSettings() {
   return new Promise(resolve =>
-    chrome.storage.sync.get(['apiUrl'], r => resolve(r.apiUrl || ''))
+    chrome.storage.sync.get(['apiUrl', 'apiUser', 'apiPass'], r => {
+      apiUrl  = r.apiUrl  || '';
+      apiUser = r.apiUser || '';
+      apiPass = r.apiPass || '';
+      resolve();
+    })
   );
+}
+
+function authHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  if (apiUser || apiPass) {
+    headers['Authorization'] = 'Basic ' + btoa(`${apiUser}:${apiPass}`);
+  }
+  return headers;
 }
 
 async function apiFetch(params) {
   const res = await fetch(apiUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify(params),
   });
+  return res.json();
+}
+
+async function apiGet(query) {
+  const res = await fetch(`${apiUrl}?${query}`, { headers: authHeaders() });
   return res.json();
 }
 
@@ -27,9 +47,7 @@ function showMsg(text, type) {
   el.style.display = 'block';
 }
 
-function hideMsg() {
-  $('msg').style.display = 'none';
-}
+function hideMsg() { $('msg').style.display = 'none'; }
 
 function setCover(dataUrl) {
   coverData = dataUrl;
@@ -41,6 +59,12 @@ function setCover(dataUrl) {
     $('cover-wrap').style.display = 'none';
     $('cover-placeholder').style.display = 'flex';
   }
+}
+
+function setUrl(url) {
+  $('url').value = url || '';
+  setCover(null);
+  hideMsg();
 }
 
 function renderTags() {
@@ -55,13 +79,8 @@ function renderTags() {
     el.className = `tag-check${selectedTags.has(label) ? ' checked' : ''}`;
     el.innerHTML = `<input type="checkbox" />${label}`;
     el.addEventListener('click', () => {
-      if (selectedTags.has(label)) {
-        selectedTags.delete(label);
-        el.classList.remove('checked');
-      } else {
-        selectedTags.add(label);
-        el.classList.add('checked');
-      }
+      selectedTags.has(label) ? selectedTags.delete(label) : selectedTags.add(label);
+      el.classList.toggle('checked', selectedTags.has(label));
     });
     list.appendChild(el);
   });
@@ -87,6 +106,7 @@ async function fetchMeta() {
   try {
     const res = await apiFetch({ action: 'fetch_meta', url });
     if (res.cover) setCover(res.cover);
+    else showMsg('No cover image found', 'error');
   } catch {
     showMsg('Could not fetch metadata', 'error');
   }
@@ -107,7 +127,6 @@ async function addVideo() {
     });
     if (res.success) {
       showMsg(`Added: ${res.video.title}`, 'success');
-      $('url').value = '';
       setCover(null);
       selectedTags.clear();
       renderTags();
@@ -121,25 +140,40 @@ async function addVideo() {
 }
 
 async function init() {
-  apiUrl = await getApiUrl();
+  await loadSettings();
+
+  $('settings-btn').addEventListener('click', () => chrome.runtime.openOptionsPage());
 
   if (!apiUrl) {
     $('no-config').style.display = 'block';
     $('go-settings').addEventListener('click', () => chrome.runtime.openOptionsPage());
-    $('settings-btn').addEventListener('click', () => chrome.runtime.openOptionsPage());
     return;
   }
 
   $('main').style.display = 'block';
-  $('settings-btn').addEventListener('click', () => chrome.runtime.openOptionsPage());
 
-  // Pre-fill current tab URL
+  // Pre-fill with current active tab URL
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab?.url) $('url').value = tab.url;
+  if (tab?.url) setUrl(tab.url);
+
+  // Update URL when user switches tabs or navigates
+  chrome.tabs.onActivated.addListener(async ({ tabId, windowId }) => {
+    const win = await chrome.windows.getCurrent();
+    if (windowId !== win.id) return;
+    const t = await chrome.tabs.get(tabId);
+    if (t.url) setUrl(t.url);
+  });
+
+  chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, t) => {
+    if (changeInfo.status !== 'complete' || !t.active || !t.url) return;
+    const win = await chrome.windows.getCurrent();
+    if (t.windowId !== win.id) return;
+    setUrl(t.url);
+  });
 
   // Load labels
   try {
-    const data = await fetch(`${apiUrl}?action=list`).then(r => r.json());
+    const data = await apiGet('action=list');
     labels = data.labels || [];
     renderTags();
   } catch { /* labels stay empty */ }
@@ -147,11 +181,7 @@ async function init() {
   $('fetch-btn').addEventListener('click', fetchMeta);
   $('add-btn').addEventListener('click', addVideo);
   $('clear-cover').addEventListener('click', () => setCover(null));
-
-  // Allow Enter on URL field to trigger fetch then add
-  $('url').addEventListener('keydown', e => {
-    if (e.key === 'Enter') addVideo();
-  });
+  $('url').addEventListener('keydown', e => { if (e.key === 'Enter') addVideo(); });
 }
 
 document.addEventListener('DOMContentLoaded', init);

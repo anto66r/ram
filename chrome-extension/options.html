@@ -12,6 +12,7 @@
       max-width: 480px;
     }
     h1 { font-size: 1.1rem; font-weight: 600; margin-bottom: 24px; }
+    .field { margin-bottom: 16px; }
     label { display: block; font-size: 0.8rem; color: #888; margin-bottom: 6px; }
     input {
       width: 100%;
@@ -22,7 +23,6 @@
       color: #eee;
       font-size: 0.9rem;
       outline: none;
-      margin-bottom: 12px;
     }
     input:focus { border-color: #3b82f6; }
     input::placeholder { color: #444; }
@@ -38,14 +38,33 @@
     }
     button:hover { opacity: 0.85; }
     #status { margin-top: 12px; font-size: 0.82rem; color: #86efac; min-height: 1.2em; }
+    .divider { border: none; border-top: 1px solid #2a2a2a; margin: 20px 0; }
+    .hint { font-size: 0.78rem; color: #555; margin-top: 4px; }
   </style>
 </head>
 <body>
   <h1>Video Library Settings</h1>
-  <label for="api-url">API URL</label>
-  <input type="url" id="api-url" placeholder="https://example.com/api.php" />
+
+  <div class="field">
+    <label for="api-url">API URL</label>
+    <input type="url" id="api-url" placeholder="https://example.com/api.php" />
+  </div>
+
+  <hr class="divider" />
+
+  <div class="field">
+    <label for="api-user">HTTP Auth Username</label>
+    <input type="text" id="api-user" placeholder="username" autocomplete="off" />
+  </div>
+  <div class="field">
+    <label for="api-pass">HTTP Auth Password</label>
+    <input type="password" id="api-pass" placeholder="password" autocomplete="off" />
+    <p class="hint">Leave blank if your site has no HTTP auth.</p>
+  </div>
+
   <button id="save">Save</button>
   <p id="status"></p>
+
   <script src="options.js"></script>
 </body>
 </html>
