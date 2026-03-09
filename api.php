@@ -150,12 +150,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         saveData($dataFile, $data);
         echo json_encode(['success' => true]);
 
-    } elseif ($postAction === 'update_cover') {
+    } elseif ($postAction === 'fetch_meta') {
+        $url = trim($body['url'] ?? '');
+        if (!$url) { echo json_encode(['error' => 'URL required']); exit; }
+        echo json_encode(fetchVideoInfo($url));
+
+    } elseif ($postAction === 'update_video') {
         $id = $body['id'] ?? '';
-        $cover = $body['cover'] ?? null;
         foreach ($data['videos'] as &$video) {
             if ($video['id'] === $id) {
-                $video['cover'] = $cover;
+                $video['url']   = trim($body['url'] ?? $video['url']);
+                $video['title'] = trim($body['title'] ?? $video['title']);
+                $video['cover'] = array_key_exists('cover', $body) ? $body['cover'] : $video['cover'];
+                $video['tags']  = array_values(array_unique($body['tags'] ?? $video['tags']));
                 break;
             }
         }

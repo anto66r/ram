@@ -197,6 +197,8 @@
       width: 100%;
       max-width: 480px;
       padding: 24px;
+      max-height: 90vh;
+      overflow-y: auto;
     }
     .modal h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 20px; }
     .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
@@ -600,15 +602,44 @@
       );
     }
 
-    // ── Set Cover Modal ───────────────────────────────────────────────────────
-    function SetCoverModal({ video, onClose, onSaved }) {
+    // ── Edit Video Modal ──────────────────────────────────────────────────────
+    function EditVideoModal({ video, labels, onClose, onSaved, onLabelAdded }) {
+      const [url, setUrl] = useState(video.url || '');
+      const [title, setTitle] = useState(video.title || '');
       const [cover, setCover] = useState(video.cover || null);
+      const [localLabels, setLocalLabels] = useState(labels);
+      const [selectedTags, setSelectedTags] = useState(video.tags || []);
       const [saving, setSaving] = useState(false);
+      const [fetching, setFetching] = useState(false);
+
+      const toggleTag = (tag) =>
+        setSelectedTags(prev =>
+          prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+        );
+
+      const handleLabelAdded = (updated) => { setLocalLabels(updated); onLabelAdded(updated); };
+
+      const handleRefetch = async () => {
+        const trimmed = url.trim();
+        if (!trimmed) return;
+        setFetching(true);
+        const res = await apiFetch({ action: 'fetch_meta', url: trimmed });
+        if (res.title) setTitle(res.title);
+        if (res.cover) setCover(res.cover);
+        setFetching(false);
+      };
 
       const handleSave = async () => {
         setSaving(true);
-        const res = await apiFetch({ action: 'update_cover', id: video.id, cover: cover });
-        if (res.success) onSaved(video.id, cover);
+        const res = await apiFetch({
+          action: 'update_video',
+          id: video.id,
+          url: url.trim(),
+          title: title.trim() || url.trim(),
+          cover,
+          tags: selectedTags,
+        });
+        if (res.success) onSaved({ ...video, url: url.trim(), title: title.trim() || url.trim(), cover, tags: selectedTags });
         setSaving(false);
         onClose();
       };
@@ -616,11 +647,37 @@
       return (
         <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
           <div className="modal">
-            <h2>Set Cover — <span style={{ color: '#888', fontWeight: 400, fontSize: '0.9rem' }}>{video.title}</span></h2>
+            <h2>Edit Video</h2>
+            <div className="field">
+              <label>URL</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={e => setUrl(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button className="btn btn-secondary btn-sm" onClick={handleRefetch} disabled={fetching}>
+                  {fetching ? <span className="spinner" /> : 'Re-fetch'}
+                </button>
+              </div>
+            </div>
+            <div className="field">
+              <label>Title</label>
+              <input type="text" value={title} onChange={e => setTitle(e.target.value)} />
+            </div>
             <PasteZone cover={cover} onCover={setCover} />
+            <TagSelector
+              labels={localLabels}
+              selected={selectedTags}
+              onToggle={toggleTag}
+              onLabelAdded={handleLabelAdded}
+            />
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>Save</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+                {saving && <span className="spinner" />}Save
+              </button>
             </div>
           </div>
         </div>
@@ -628,7 +685,7 @@
     }
 
     // ── Video Card ────────────────────────────────────────────────────────────
-    function VideoCard({ video, onDelete, onEditTags, onSetCover }) {
+    function VideoCard({ video, onDelete, onEdit }) {
       const openVideo = () => window.open(video.url, '_blank', 'noopener,noreferrer');
 
       return (
@@ -646,8 +703,7 @@
             )}
           </div>
           <div className="card-footer">
-            <button className="btn btn-ghost btn-sm" onClick={() => onSetCover(video)}>Cover</button>
-            <button className="btn btn-ghost btn-sm" onClick={() => onEditTags(video)}>Tags</button>
+            <button className="btn btn-ghost btn-sm" onClick={() => onEdit(video)}>Edit</button>
             <button className="btn btn-ghost btn-sm" style={{ color: '#f87171' }} onClick={() => onDelete(video.id)}>Delete</button>
           </div>
         </div>
@@ -687,17 +743,11 @@
         if (!res.success) showToast('Delete failed', 'error');
       };
 
-      const handleEditTags = (video) => setModal({ type: 'editTags', video });
-      const handleSetCover = (video) => setModal({ type: 'setCover', video });
+      const handleEdit = (video) => setModal({ type: 'edit', video });
 
-      const handleTagsSaved = (id, newTags) => {
-        setVideos(prev => prev.map(v => v.id === id ? { ...v, tags: newTags } : v));
-        showToast('Tags updated!');
-      };
-
-      const handleCoverSaved = (id, cover) => {
-        setVideos(prev => prev.map(v => v.id === id ? { ...v, cover } : v));
-        showToast('Cover updated!');
+      const handleVideoSaved = (updated) => {
+        setVideos(prev => prev.map(v => v.id === updated.id ? updated : v));
+        showToast('Video updated!');
       };
 
       const handleLabelsUpdate = (updatedLabels, deletedLabel) => {
@@ -758,8 +808,7 @@
                 key={video.id}
                 video={video}
                 onDelete={handleDelete}
-                onEditTags={handleEditTags}
-                onSetCover={handleSetCover}
+                onEdit={handleEdit}
               />
             ))}
           </div>
@@ -779,20 +828,13 @@
               onUpdate={handleLabelsUpdate}
             />
           )}
-          {modal && modal.type === 'editTags' && (
-            <EditTagsModal
+          {modal && modal.type === 'edit' && (
+            <EditVideoModal
               video={modal.video}
               labels={labels}
               onClose={() => setModal(null)}
-              onSaved={handleTagsSaved}
+              onSaved={handleVideoSaved}
               onLabelAdded={setLabels}
-            />
-          )}
-          {modal && modal.type === 'setCover' && (
-            <SetCoverModal
-              video={modal.video}
-              onClose={() => setModal(null)}
-              onSaved={handleCoverSaved}
             />
           )}
 
