@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Video Library</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #111;
+      color: #eee;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #2a2a2a;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header h1 { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em; }
+    .header-actions { display: flex; gap: 8px; }
+
+    /* Buttons */
+    .btn {
+      padding: 7px 14px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: #3b82f6; color: #fff; }
+    .btn-secondary { background: #2a2a2a; color: #ccc; border: 1px solid #333; }
+    .btn-danger { background: #ef4444; color: #fff; }
+    .btn-ghost { background: transparent; color: #888; border: 1px solid #333; }
+    .btn-sm { padding: 4px 10px; font-size: 0.78rem; }
+
+    /* Filter bar */
+    .filter-bar {
+      padding: 12px 24px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      border-bottom: 1px solid #1e1e1e;
+      background: #141414;
+    }
+    .filter-bar span { font-size: 0.8rem; color: #666; margin-right: 4px; }
+    .tag-pill {
+      padding: 4px 12px;
+      border-radius: 999px;
+      border: 1px solid #333;
+      background: #1e1e1e;
+      color: #aaa;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tag-pill:hover { border-color: #555; color: #ddd; }
+    .tag-pill.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+
+    /* Grid */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+      padding: 24px;
+    }
+
+    /* Card */
+    .card {
+      background: #1a1a1a;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #222;
+      transition: transform 0.15s, border-color 0.15s;
+      position: relative;
+    }
+    .card:hover { transform: translateY(-2px); border-color: #3b82f6; }
+    .card-thumb {
+      width: 100%;
+      aspect-ratio: 16/9;
+      object-fit: cover;
+      display: block;
+      background: #0d0d0d;
+      cursor: pointer;
+    }
+    .card-thumb-placeholder {
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #0d0d0d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #444;
+      font-size: 2rem;
+      cursor: pointer;
+    }
+    .card-body { padding: 10px 12px 12px; }
+    .card-title {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: #ddd;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+      margin-bottom: 8px;
+    }
+    .card-title:hover { color: #3b82f6; }
+    .card-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+    .card-tag {
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #2a2a2a;
+      color: #888;
+      font-size: 0.7rem;
+      border: 1px solid #333;
+    }
+    .card-footer {
+      padding: 8px 12px;
+      border-top: 1px solid #222;
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    /* Empty state */
+    .empty {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 80px 20px;
+      color: #555;
+    }
+    .empty h2 { font-size: 1.1rem; margin-bottom: 8px; }
+    .empty p { font-size: 0.85rem; }
+
+    /* Modal overlay */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal {
+      background: #1a1a1a;
+      border-radius: 12px;
+      border: 1px solid #2a2a2a;
+      width: 100%;
+      max-width: 480px;
+      padding: 24px;
+    }
+    .modal h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 20px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+    /* Form elements */
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 0.8rem; color: #888; margin-bottom: 6px; }
+    .field input[type="text"],
+    .field input[type="url"] {
+      width: 100%;
+      padding: 9px 12px;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #eee;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .field input:focus { border-color: #3b82f6; }
+    .field input::placeholder { color: #444; }
+
+    /* Tag checkboxes */
+    .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag-check {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid #333;
+      background: #111;
+      cursor: pointer;
+      font-size: 0.78rem;
+      color: #aaa;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .tag-check.checked { background: #1e3a5f; border-color: #3b82f6; color: #93c5fd; }
+    .tag-check input { display: none; }
+
+    /* Labels manager */
+    .label-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 0;
+      border-bottom: 1px solid #222;
+      font-size: 0.85rem;
+    }
+    .label-row:last-child { border-bottom: none; }
+    .add-label-row { display: flex; gap: 8px; margin-top: 16px; }
+    .add-label-row input {
+      flex: 1;
+      padding: 8px 12px;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #eee;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .add-label-row input:focus { border-color: #3b82f6; }
+
+    /* Loading spinner */
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid #333;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #1e3a5f;
+      border: 1px solid #3b82f6;
+      color: #93c5fd;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      z-index: 200;
+      animation: fadeIn 0.2s ease;
+    }
+    .toast.error { background: #3f1515; border-color: #ef4444; color: #fca5a5; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useRef } = React;
+
+    const API = 'api.php';
+
+    async function apiFetch(params) {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      });
+      return res.json();
+    }
+
+    // ── Toast ────────────────────────────────────────────────────────────────
+    function Toast({ msg, type, onDone }) {
+      useEffect(() => {
+        const t = setTimeout(onDone, 2800);
+        return () => clearTimeout(t);
+      }, []);
+      return <div className={`toast${type === 'error' ? ' error' : ''}`}>{msg}</div>;
+    }
+
+    // ── Add Video Modal ───────────────────────────────────────────────────────
+    function AddVideoModal({ labels, onClose, onAdded }) {
+      const [url, setUrl] = useState('');
+      const [selectedTags, setSelectedTags] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState('');
+
+      const toggleTag = (tag) =>
+        setSelectedTags(prev =>
+          prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+        );
+
+      const handleAdd = async () => {
+        const trimmed = url.trim();
+        if (!trimmed) { setError('Please enter a URL.'); return; }
+        setLoading(true);
+        setError('');
+        try {
+          const res = await apiFetch({ action: 'add', url: trimmed, tags: selectedTags });
+          if (res.success) {
+            onAdded(res.video);
+            onClose();
+          } else {
+            setError(res.error || 'Failed to add video.');
+          }
+        } catch {
+          setError('Network error.');
+        }
+        setLoading(false);
+      };
+
+      const handleKey = (e) => { if (e.key === 'Enter') handleAdd(); };
+
+      return (
+        <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+          <div className="modal">
+            <h2>Add Video</h2>
+            <div className="field">
+              <label>URL</label>
+              <input
+                type="url"
+                placeholder="https://..."
+                value={url}
+                onChange={e => setUrl(e.target.value)}
+                onKeyDown={handleKey}
+                autoFocus
+              />
+            </div>
+            {labels.length > 0 && (
+              <div className="field">
+                <label>Tags</label>
+                <div className="tag-list">
+                  {labels.map(label => (
+                    <label key={label} className={`tag-check ${selectedTags.includes(label) ? 'checked' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={selectedTags.includes(label)}
+                        onChange={() => toggleTag(label)}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            {error && <p style={{ color: '#f87171', fontSize: '0.82rem', marginBottom: 8 }}>{error}</p>}
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleAdd} disabled={loading}>
+                {loading && <span className="spinner" />}
+                {loading ? 'Fetching…' : 'Add Video'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Edit Tags Modal ───────────────────────────────────────────────────────
+    function EditTagsModal({ video, labels, onClose, onSaved }) {
+      const [selectedTags, setSelectedTags] = useState(video.tags || []);
+      const [saving, setSaving] = useState(false);
+
+      const toggleTag = (tag) =>
+        setSelectedTags(prev =>
+          prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+        );
+
+      const handleSave = async () => {
+        setSaving(true);
+        const res = await apiFetch({ action: 'update_tags', id: video.id, tags: selectedTags });
+        if (res.success) onSaved(video.id, selectedTags);
+        setSaving(false);
+        onClose();
+      };
+
+      return (
+        <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+          <div className="modal">
+            <h2>Edit Tags — <span style={{ color: '#888', fontWeight: 400, fontSize: '0.9rem' }}>{video.title}</span></h2>
+            {labels.length === 0
+              ? <p style={{ color: '#666', fontSize: '0.85rem' }}>No labels yet. Add some in Manage Labels.</p>
+              : (
+                <div className="tag-list">
+                  {labels.map(label => (
+                    <label key={label} className={`tag-check ${selectedTags.includes(label) ? 'checked' : ''}`}>
+                      <input
+                        type="checkbox"
+                        checked={selectedTags.includes(label)}
+                        onChange={() => toggleTag(label)}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              )}
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>Save</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Manage Labels Modal ───────────────────────────────────────────────────
+    function ManageLabelsModal({ labels, onClose, onUpdate }) {
+      const [newLabel, setNewLabel] = useState('');
+      const [localLabels, setLocalLabels] = useState(labels);
+
+      const handleAdd = async () => {
+        const trimmed = newLabel.trim();
+        if (!trimmed || localLabels.includes(trimmed)) return;
+        const res = await apiFetch({ action: 'add_label', label: trimmed });
+        if (res.success) {
+          setLocalLabels(res.labels);
+          onUpdate(res.labels);
+          setNewLabel('');
+        }
+      };
+
+      const handleDelete = async (label) => {
+        const res = await apiFetch({ action: 'delete_label', label });
+        if (res.success) {
+          const updated = localLabels.filter(l => l !== label);
+          setLocalLabels(updated);
+          onUpdate(updated, label);
+        }
+      };
+
+      const handleKey = (e) => { if (e.key === 'Enter') handleAdd(); };
+
+      return (
+        <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+          <div className="modal">
+            <h2>Manage Labels</h2>
+            {localLabels.length === 0
+              ? <p style={{ color: '#666', fontSize: '0.85rem', marginBottom: 8 }}>No labels yet.</p>
+              : localLabels.map(label => (
+                <div key={label} className="label-row">
+                  <span>{label}</span>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => handleDelete(label)}
+                    style={{ color: '#f87171' }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              ))
+            }
+            <div className="add-label-row">
+              <input
+                type="text"
+                placeholder="New label…"
+                value={newLabel}
+                onChange={e => setNewLabel(e.target.value)}
+                onKeyDown={handleKey}
+                autoFocus
+              />
+              <button className="btn btn-primary" onClick={handleAdd}>Add</button>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={onClose}>Done</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Video Card ────────────────────────────────────────────────────────────
+    function VideoCard({ video, onDelete, onEditTags }) {
+      const openVideo = () => window.open(video.url, '_blank', 'noopener,noreferrer');
+
+      return (
+        <div className="card">
+          {video.cover
+            ? <img className="card-thumb" src={video.cover} alt={video.title} onClick={openVideo} loading="lazy" />
+            : <div className="card-thumb-placeholder" onClick={openVideo}>▶</div>
+          }
+          <div className="card-body">
+            <div className="card-title" onClick={openVideo} title={video.title}>{video.title}</div>
+            {video.tags && video.tags.length > 0 && (
+              <div className="card-tags">
+                {video.tags.map(tag => <span key={tag} className="card-tag">{tag}</span>)}
+              </div>
+            )}
+          </div>
+          <div className="card-footer">
+            <button className="btn btn-ghost btn-sm" onClick={() => onEditTags(video)}>Tags</button>
+            <button className="btn btn-ghost btn-sm" style={{ color: '#f87171' }} onClick={() => onDelete(video.id)}>Delete</button>
+          </div>
+        </div>
+      );
+    }
+
+    // ── App ───────────────────────────────────────────────────────────────────
+    function App() {
+      const [videos, setVideos] = useState([]);
+      const [labels, setLabels] = useState([]);
+      const [filterTag, setFilterTag] = useState(null);
+      const [modal, setModal] = useState(null); // 'add' | 'labels' | {type:'editTags', video}
+      const [toast, setToast] = useState(null);
+      const [loading, setLoading] = useState(true);
+
+      const showToast = (msg, type = 'info') => setToast({ msg, type });
+
+      useEffect(() => {
+        fetch(`${API}?action=list`)
+          .then(r => r.json())
+          .then(data => {
+            setVideos(data.videos || []);
+            setLabels(data.labels || []);
+          })
+          .catch(() => showToast('Could not load data', 'error'))
+          .finally(() => setLoading(false));
+      }, []);
+
+      const handleAdded = (video) => {
+        setVideos(prev => [video, ...prev]);
+        showToast('Video added!');
+      };
+
+      const handleDelete = async (id) => {
+        setVideos(prev => prev.filter(v => v.id !== id));
+        const res = await apiFetch({ action: 'delete', id });
+        if (!res.success) showToast('Delete failed', 'error');
+      };
+
+      const handleEditTags = (video) => setModal({ type: 'editTags', video });
+
+      const handleTagsSaved = (id, newTags) => {
+        setVideos(prev => prev.map(v => v.id === id ? { ...v, tags: newTags } : v));
+        showToast('Tags updated!');
+      };
+
+      const handleLabelsUpdate = (updatedLabels, deletedLabel) => {
+        setLabels(updatedLabels);
+        if (deletedLabel) {
+          setVideos(prev =>
+            prev.map(v => ({ ...v, tags: v.tags.filter(t => t !== deletedLabel) }))
+          );
+          if (filterTag === deletedLabel) setFilterTag(null);
+        }
+      };
+
+      const filteredVideos = filterTag
+        ? videos.filter(v => v.tags && v.tags.includes(filterTag))
+        : videos;
+
+      return (
+        <>
+          <header className="header">
+            <h1>Video Library</h1>
+            <div className="header-actions">
+              <button className="btn btn-secondary" onClick={() => setModal('labels')}>Labels</button>
+              <button className="btn btn-primary" onClick={() => setModal('add')}>+ Add Video</button>
+            </div>
+          </header>
+
+          <div className="filter-bar">
+            <span>Filter:</span>
+            <button
+              className={`tag-pill ${!filterTag ? 'active' : ''}`}
+              onClick={() => setFilterTag(null)}
+            >
+              All
+            </button>
+            {labels.map(label => (
+              <button
+                key={label}
+                className={`tag-pill ${filterTag === label ? 'active' : ''}`}
+                onClick={() => setFilterTag(filterTag === label ? null : label)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid">
+            {loading && (
+              <div className="empty"><p><span className="spinner" /> Loading…</p></div>
+            )}
+            {!loading && filteredVideos.length === 0 && (
+              <div className="empty">
+                <h2>{filterTag ? `No videos tagged "${filterTag}"` : 'No videos yet'}</h2>
+                <p>{!filterTag && 'Click "+ Add Video" to get started.'}</p>
+              </div>
+            )}
+            {filteredVideos.map(video => (
+              <VideoCard
+                key={video.id}
+                video={video}
+                onDelete={handleDelete}
+                onEditTags={handleEditTags}
+              />
+            ))}
+          </div>
+
+          {modal === 'add' && (
+            <AddVideoModal
+              labels={labels}
+              onClose={() => setModal(null)}
+              onAdded={handleAdded}
+            />
+          )}
+          {modal === 'labels' && (
+            <ManageLabelsModal
+              labels={labels}
+              onClose={() => setModal(null)}
+              onUpdate={handleLabelsUpdate}
+            />
+          )}
+          {modal && modal.type === 'editTags' && (
+            <EditTagsModal
+              video={modal.video}
+              labels={labels}
+              onClose={() => setModal(null)}
+              onSaved={handleTagsSaved}
+            />
+          )}
+
+          {toast && (
+            <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />
+          )}
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
