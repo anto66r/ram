@@ -49,22 +49,49 @@
     .btn-ghost { background: transparent; color: #888; border: 1px solid #333; }
     .btn-sm { padding: 4px 10px; font-size: 0.78rem; }
 
-    /* Filter bar */
+    /* Tab bar */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      background: #141414;
+      padding: 0 24px;
+      border-bottom: 1px solid #2a2a2a;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tab-bar::-webkit-scrollbar { display: none; }
+    .tab {
+      padding: 10px 16px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: #888;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+      margin-bottom: -1px;
+    }
+    .tab:hover { color: #ddd; }
+    .tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+
+    /* Filter bar (sub-filter within a tab) */
     .filter-bar {
-      padding: 12px 24px;
+      padding: 10px 24px;
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
       align-items: center;
       border-bottom: 1px solid #1e1e1e;
-      background: #141414;
+      background: #111;
     }
     .filter-bar span { font-size: 0.8rem; color: #666; margin-right: 4px; }
     .tag-pill {
       padding: 4px 12px;
       border-radius: 999px;
       border: 1px solid #333;
-      background: #1e1e1e;
+      background: #1a1a1a;
       color: #aaa;
       font-size: 0.78rem;
       cursor: pointer;
@@ -764,6 +791,7 @@
     function App() {
       const [videos, setVideos] = useState([]);
       const [labels, setLabels] = useState([]);
+      const [activeTab, setActiveTab] = useState(null);
       const [filterTag, setFilterTag] = useState(null);
       const [modal, setModal] = useState(null); // 'add' | 'labels' | {type:'editTags', video}
       const [toast, setToast] = useState(null);
@@ -811,13 +839,16 @@
           setVideos(prev =>
             prev.map(v => ({ ...v, tags: v.tags.filter(t => t !== deletedLabel) }))
           );
+          if (activeTab === deletedLabel) setActiveTab(null);
           if (filterTag === deletedLabel) setFilterTag(null);
         }
       };
 
-      const filteredVideos = filterTag
-        ? videos.filter(v => v.tags && v.tags.includes(filterTag))
-        : videos;
+      const tabVideos = activeTab ? videos.filter(v => v.tags?.includes(activeTab)) : videos;
+      const filteredVideos = filterTag ? tabVideos.filter(v => v.tags?.includes(filterTag)) : tabVideos;
+      const subLabels = activeTab
+        ? [...new Set(tabVideos.flatMap(v => v.tags || []))].filter(l => l !== activeTab)
+        : [];
 
       return (
         <>
@@ -829,24 +860,36 @@
             </div>
           </header>
 
-          <div className="filter-bar">
-            <span>Filter:</span>
+          <div className="tab-bar">
             <button
-              className={`tag-pill ${!filterTag ? 'active' : ''}`}
-              onClick={() => setFilterTag(null)}
-            >
-              All
-            </button>
+              className={`tab ${!activeTab ? 'active' : ''}`}
+              onClick={() => { setActiveTab(null); setFilterTag(null); }}
+            >All</button>
             {labels.map(label => (
               <button
                 key={label}
-                className={`tag-pill ${filterTag === label ? 'active' : ''}`}
-                onClick={() => setFilterTag(filterTag === label ? null : label)}
-              >
-                {label}
-              </button>
+                className={`tab ${activeTab === label ? 'active' : ''}`}
+                onClick={() => { setActiveTab(activeTab === label ? null : label); setFilterTag(null); }}
+              >{label}</button>
             ))}
           </div>
+
+          {activeTab && subLabels.length > 0 && (
+            <div className="filter-bar">
+              <span>Filter:</span>
+              <button
+                className={`tag-pill ${!filterTag ? 'active' : ''}`}
+                onClick={() => setFilterTag(null)}
+              >All</button>
+              {subLabels.map(label => (
+                <button
+                  key={label}
+                  className={`tag-pill ${filterTag === label ? 'active' : ''}`}
+                  onClick={() => setFilterTag(filterTag === label ? null : label)}
+                >{label}</button>
+              ))}
+            </div>
+          )}
 
           <div className="grid">
             {loading && (
@@ -854,8 +897,8 @@
             )}
             {!loading && filteredVideos.length === 0 && (
               <div className="empty">
-                <h2>{filterTag ? `No videos tagged "${filterTag}"` : 'No videos yet'}</h2>
-                <p>{!filterTag && 'Click "+ Add Video" to get started.'}</p>
+                <h2>{activeTab || filterTag ? `No videos found` : 'No videos yet'}</h2>
+                <p>{!activeTab && !filterTag && 'Click "+ Add Video" to get started.'}</p>
               </div>
             )}
             {filteredVideos.map(video => (
