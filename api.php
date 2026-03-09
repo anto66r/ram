@@ -22,6 +22,20 @@ function saveData($file, $data) {
     file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 }
 
+function curlGet($url) {
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; VideoLibrary/1.0)',
+        CURLOPT_SSL_VERIFYPEER => false,
+    ]);
+    $result = curl_exec($ch);
+    curl_close($ch);
+    return $result ?: null;
+}
+
 function fetchVideoInfo($url) {
     $info = ['cover' => null, 'title' => null];
 
@@ -29,7 +43,7 @@ function fetchVideoInfo($url) {
     if (preg_match('/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/', $url, $m)) {
         $videoId = $m[1];
         $info['cover'] = "https://img.youtube.com/vi/{$videoId}/hqdefault.jpg";
-        $oembed = @json_decode(@file_get_contents(
+        $oembed = @json_decode(curlGet(
             "https://www.youtube.com/oembed?url=" . urlencode($url) . "&format=json"
         ), true);
         $info['title'] = $oembed['title'] ?? null;
@@ -38,7 +52,7 @@ function fetchVideoInfo($url) {
 
     // Vimeo
     if (preg_match('/vimeo\.com\/(\d+)/', $url, $m)) {
-        $oembed = @json_decode(@file_get_contents(
+        $oembed = @json_decode(curlGet(
             "https://vimeo.com/api/oembed.json?url=" . urlencode($url)
         ), true);
         $info['cover'] = $oembed['thumbnail_url'] ?? null;
@@ -47,12 +61,7 @@ function fetchVideoInfo($url) {
     }
 
     // Generic: parse og:image and og:title
-    $ctx = stream_context_create(['http' => [
-        'timeout' => 10,
-        'user_agent' => 'Mozilla/5.0 (compatible; VideoLibrary/1.0)',
-        'follow_location' => true,
-    ]]);
-    $html = @file_get_contents($url, false, $ctx);
+    $html = curlGet($url);
     if ($html) {
         // og:image
         if (preg_match('/<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']/', $html, $m) ||
