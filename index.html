@@ -263,6 +263,12 @@
     }
     .add-label-row input:focus { border-color: #3b82f6; }
 
+    /* Stars */
+    .star-rating { display: flex; gap: 1px; line-height: 1; }
+    .star { font-size: 1rem; color: #444; cursor: pointer; transition: color 0.1s; user-select: none; }
+    .star.filled { color: #f59e0b; }
+    .star-rating.readonly .star { cursor: default; }
+
     /* Loading spinner */
     .spinner {
       display: inline-block;
@@ -344,6 +350,27 @@
         return () => clearTimeout(t);
       }, []);
       return <div className={`toast${type === 'error' ? ' error' : ''}`}>{msg}</div>;
+    }
+
+    // ── Star Rating ───────────────────────────────────────────────────────────
+    function StarRating({ rating = 0, onRate, readonly = false }) {
+      const [hovered, setHovered] = useState(null);
+      const display = hovered ?? rating;
+      return (
+        <div
+          className={`star-rating${readonly ? ' readonly' : ''}`}
+          onMouseLeave={() => !readonly && setHovered(null)}
+        >
+          {[1,2,3,4,5].map(n => (
+            <span
+              key={n}
+              className={`star${n <= display ? ' filled' : ''}`}
+              onMouseEnter={() => !readonly && setHovered(n)}
+              onClick={() => onRate && onRate(n === rating ? 0 : n)}
+            >★</span>
+          ))}
+        </div>
+      );
     }
 
     // ── Tag Selector ──────────────────────────────────────────────────────────
@@ -607,6 +634,7 @@
       const [url, setUrl] = useState(video.url || '');
       const [title, setTitle] = useState(video.title || '');
       const [cover, setCover] = useState(video.cover || null);
+      const [rating, setRating] = useState(video.rating || 0);
       const [localLabels, setLocalLabels] = useState(labels);
       const [selectedTags, setSelectedTags] = useState(video.tags || []);
       const [saving, setSaving] = useState(false);
@@ -638,8 +666,9 @@
           title: title.trim() || url.trim(),
           cover,
           tags: selectedTags,
+          rating,
         });
-        if (res.success) onSaved({ ...video, url: url.trim(), title: title.trim() || url.trim(), cover, tags: selectedTags });
+        if (res.success) onSaved({ ...video, url: url.trim(), title: title.trim() || url.trim(), cover, tags: selectedTags, rating });
         setSaving(false);
         onClose();
       };
@@ -673,6 +702,10 @@
               onToggle={toggleTag}
               onLabelAdded={handleLabelAdded}
             />
+            <div className="field">
+              <label>Rating</label>
+              <StarRating rating={rating} onRate={setRating} />
+            </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
@@ -685,7 +718,7 @@
     }
 
     // ── Video Card ────────────────────────────────────────────────────────────
-    function VideoCard({ video, onDelete, onEdit }) {
+    function VideoCard({ video, onDelete, onEdit, onRate }) {
       const openVideo = () => window.open(video.url, '_blank', 'noopener,noreferrer');
 
       return (
@@ -697,10 +730,11 @@
           <div className="card-body">
             <div className="card-title" onClick={openVideo} title={video.title}>{video.title}</div>
             {video.tags && video.tags.length > 0 && (
-              <div className="card-tags">
+              <div className="card-tags" style={{ marginBottom: 8 }}>
                 {video.tags.map(tag => <span key={tag} className="card-tag">{tag}</span>)}
               </div>
             )}
+            <StarRating rating={video.rating || 0} onRate={r => onRate(video.id, r)} />
           </div>
           <div className="card-footer">
             <button className="btn btn-ghost btn-sm" onClick={() => onEdit(video)}>Edit</button>
@@ -744,6 +778,11 @@
       };
 
       const handleEdit = (video) => setModal({ type: 'edit', video });
+
+      const handleRate = async (id, rating) => {
+        setVideos(prev => prev.map(v => v.id === id ? { ...v, rating } : v));
+        await apiFetch({ action: 'rate_video', id, rating });
+      };
 
       const handleVideoSaved = (updated) => {
         setVideos(prev => prev.map(v => v.id === updated.id ? updated : v));
@@ -809,6 +848,7 @@
                 video={video}
                 onDelete={handleDelete}
                 onEdit={handleEdit}
+                onRate={handleRate}
               />
             ))}
           </div>

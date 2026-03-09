@@ -140,6 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'title'      => $info['title'] ?? $url,
             'cover'      => $coverData ?: $info['cover'],
             'tags'       => array_values(array_unique($tags)),
+            'rating'     => 0,
             'created_at' => date('c'),
         ];
         $data['videos'][] = $video;
@@ -174,14 +175,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$url) { echo json_encode(['error' => 'URL required']); exit; }
         echo json_encode(fetchVideoInfo($url));
 
+    } elseif ($postAction === 'rate_video') {
+        $id     = $body['id'] ?? '';
+        $rating = max(0, min(5, (int)($body['rating'] ?? 0)));
+        foreach ($data['videos'] as &$video) {
+            if ($video['id'] === $id) {
+                $video['rating'] = $rating;
+                break;
+            }
+        }
+        saveData($dataFile, $data);
+        echo json_encode(['success' => true]);
+
     } elseif ($postAction === 'update_video') {
         $id = $body['id'] ?? '';
         foreach ($data['videos'] as &$video) {
             if ($video['id'] === $id) {
-                $video['url']   = trim($body['url'] ?? $video['url']);
-                $video['title'] = trim($body['title'] ?? $video['title']);
-                $video['cover'] = array_key_exists('cover', $body) ? $body['cover'] : $video['cover'];
-                $video['tags']  = array_values(array_unique($body['tags'] ?? $video['tags']));
+                $video['url']    = trim($body['url'] ?? $video['url']);
+                $video['title']  = trim($body['title'] ?? $video['title']);
+                $video['cover']  = array_key_exists('cover', $body) ? $body['cover'] : $video['cover'];
+                $video['tags']   = array_values(array_unique($body['tags'] ?? $video['tags']));
+                $video['rating'] = array_key_exists('rating', $body) ? max(0, min(5, (int)$body['rating'])) : ($video['rating'] ?? 0);
                 break;
             }
         }
