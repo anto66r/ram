@@ -65,6 +65,7 @@ async function apiFetch(params) {
     headers: authHeaders(),
     body: JSON.stringify(params),
   });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
@@ -141,8 +142,8 @@ async function fetchMeta() {
     const res = await apiFetch({ action: 'fetch_meta', url });
     if (res.cover) setCover(res.cover);
     else showMsg('No cover image found', 'error');
-  } catch {
-    showMsg('Could not fetch metadata', 'error');
+  } catch(e) {
+    showMsg('Error: ' + e.message, 'error');
   }
   setFetching(false);
 }
