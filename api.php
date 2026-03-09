@@ -113,12 +113,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['error' => 'URL is required']);
             exit;
         }
+        $coverData = $body['cover_data'] ?? null;
         $info = fetchVideoInfo($url);
         $video = [
             'id'         => uniqid('v_', true),
             'url'        => $url,
             'title'      => $info['title'] ?? $url,
-            'cover'      => $info['cover'],
+            'cover'      => $coverData ?: $info['cover'],
             'tags'       => array_values(array_unique($tags)),
             'created_at' => date('c'),
         ];
@@ -145,6 +146,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $data['labels'] = array_values(array_filter($data['labels'], fn($l) => $l !== $label));
         foreach ($data['videos'] as &$video) {
             $video['tags'] = array_values(array_filter($video['tags'], fn($t) => $t !== $label));
+        }
+        saveData($dataFile, $data);
+        echo json_encode(['success' => true]);
+
+    } elseif ($postAction === 'update_cover') {
+        $id = $body['id'] ?? '';
+        $cover = $body['cover'] ?? null;
+        foreach ($data['videos'] as &$video) {
+            if ($video['id'] === $id) {
+                $video['cover'] = $cover;
+                break;
+            }
         }
         saveData($dataFile, $data);
         echo json_encode(['success' => true]);
