@@ -123,6 +123,44 @@ function fetchVideoInfo($url, $id = null) {
         return $info;
     }
 
+    // xhamster
+    if (preg_match('/xhamster\.com\/videos\/[^\/]+-(\d+)/', $url, $m)) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_HTTPHEADER     => ['Accept-Language: en-US,en;q=0.9', 'Accept: text/html'],
+        ]);
+        $html = curl_exec($ch);
+        curl_close($ch);
+        if ($html) {
+            // Try JSON-LD first (VideoObject with thumbnailUrl)
+            if (preg_match_all('/<script[^>]+type=["\']application\/ld\+json["\'][^>]*>(.*?)<\/script>/is', $html, $scripts)) {
+                foreach ($scripts[1] as $json) {
+                    $ld = @json_decode(trim($json), true);
+                    if ($ld && isset($ld['thumbnailUrl'])) {
+                        $info['title'] = $ld['name'] ?? null;
+                        $info['cover'] = $saveOrBase64($ld['thumbnailUrl']);
+                        return $info;
+                    }
+                }
+            }
+            // Fallback: og:image
+            if (preg_match('/property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']/', $html, $m) ||
+                preg_match('/content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']/', $html, $m)) {
+                $info['cover'] = $saveOrBase64($m[1]);
+            }
+            if (preg_match('/property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']/', $html, $m) ||
+                preg_match('/content=["\']([^"\']+)["\'][^>]+property=["\']og:title["\']/', $html, $m)) {
+                $info['title'] = html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
+            }
+        }
+        return $info;
+    }
+
     // Generic: parse og:image and og:title
     $html = curlGet($url);
     if ($html) {
