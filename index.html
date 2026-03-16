@@ -549,20 +549,26 @@
                 </button>
               </div>
             </div>
-            <PasteZone cover={cover} onCover={setCover} />
-            <TagSelector
-              labels={localLabels}
-              selected={selectedTags}
-              onToggle={toggleTag}
-              onLabelAdded={handleLabelAdded}
-            />
-            {error && <p style={{ color: '#f87171', fontSize: '0.82rem', marginBottom: 8 }}>{error}</p>}
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleAdd} disabled={loading}>
-                {loading && <span className="spinner" />}
-                {loading ? 'Fetching…' : 'Add Video'}
-              </button>
+            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+              <div style={{ flex: '0 0 48%' }}>
+                <PasteZone cover={cover} onCover={setCover} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <TagSelector
+                  labels={localLabels}
+                  selected={selectedTags}
+                  onToggle={toggleTag}
+                  onLabelAdded={handleLabelAdded}
+                />
+                {error && <p style={{ color: '#f87171', fontSize: '0.82rem', margin: 0 }}>{error}</p>}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                  <button className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
+                  <button className="btn btn-primary" onClick={handleAdd} disabled={loading}>
+                    {loading && <span className="spinner" />}
+                    {loading ? 'Fetching…' : 'Add Video'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
