@@ -493,7 +493,9 @@
         const trimmed = url.trim();
         if (!trimmed) return;
         setFetching(true);
+        setError('');
         const res = await apiFetch({ action: 'fetch_meta', url: trimmed });
+        if (res.exists) setError(`Already in library: ${res.existing_title}`);
         if (res.cover) setCover(res.cover);
         setFetching(false);
       };

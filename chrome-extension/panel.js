@@ -140,8 +140,9 @@ async function fetchMeta() {
   hideMsg();
   try {
     const res = await apiFetch({ action: 'fetch_meta', url });
+    if (res.exists) showMsg(`Already in library: ${res.existing_title}`, 'error');
     if (res.cover) setCover(res.cover);
-    else showMsg('No cover image found', 'error');
+    else if (!res.exists) showMsg('No cover image found', 'error');
   } catch(e) {
     showMsg('Error: ' + e.message, 'error');
   }

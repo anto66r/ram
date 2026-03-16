@@ -270,7 +270,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($postAction === 'fetch_meta') {
         $url = trim($body['url'] ?? '');
         if (!$url) { echo json_encode(['error' => 'URL required']); exit; }
-        echo json_encode(fetchVideoInfo($url));
+        $result = fetchVideoInfo($url);
+        foreach ($data['videos'] as $existing) {
+            if (rtrim($existing['url'], '/') === rtrim($url, '/')) {
+                $result['exists'] = true;
+                $result['existing_title'] = $existing['title'] ?? $url;
+                break;
+            }
+        }
+        echo json_encode($result);
 
     } elseif ($postAction === 'rate_video') {
         $id     = $body['id'] ?? '';
