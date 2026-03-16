@@ -65,7 +65,6 @@
     .row { display: flex; gap: 6px; }
     .row input { flex: 1; }
 
-    .cover-wrap { margin-bottom: 14px; }
     .cover-wrap img { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 6px; border: 1px solid #333; display: block; }
     .cover-clear { margin-top: 4px; background: none; border: none; color: #f87171; font-size: 0.75rem; cursor: pointer; padding: 0; width: auto; }
     .cover-clear:hover { text-decoration: underline; }
@@ -80,8 +79,9 @@
       align-items: center;
       justify-content: center;
       color: #444;
-      font-size: 0.78rem;
-      margin-bottom: 14px;
+      font-size: 0.75rem;
+      text-align: center;
+      padding: 6px;
       cursor: pointer;
       outline: none;
       transition: border-color 0.15s, color 0.15s;
@@ -89,6 +89,20 @@
     .cover-placeholder:focus, .cover-placeholder:hover {
       border-color: #3b82f6;
       color: #888;
+    }
+
+    .media-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .media-left { flex: 0 0 48%; }
+    .media-right {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
     }
 
     .tags-list { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -112,7 +126,6 @@
       padding: 8px 12px;
       border-radius: 6px;
       font-size: 0.8rem;
-      margin-bottom: 10px;
     }
     .msg.error { background: #3f1515; border: 1px solid #ef4444; color: #fca5a5; }
     .msg.success { background: #14352a; border: 1px solid #22c55e; color: #86efac; }
@@ -158,16 +171,23 @@
       </div>
     </div>
 
-    <div id="cover-wrap" class="cover-wrap" style="display:none">
-      <img id="cover-img" alt="cover" />
-      <button class="cover-clear" id="clear-cover">Remove image</button>
+    <div class="media-row">
+      <div class="media-left">
+        <div id="cover-wrap" class="cover-wrap" style="display:none">
+          <img id="cover-img" alt="cover" />
+          <button class="cover-clear" id="clear-cover">Remove image</button>
+        </div>
+        <div id="cover-placeholder" class="cover-placeholder" tabindex="0">Click then ⌘V / Ctrl+V to paste</div>
+      </div>
+      <div class="media-right">
+        <div class="field" style="margin-bottom:0">
+          <label>Tags</label>
+          <div id="tags-list" class="tags-list"></div>
+        </div>
+        <div id="msg" style="display:none"></div>
+        <button class="btn-primary" id="add-btn">Add to Library</button>
+      </div>
     </div>
-    <div id="cover-placeholder" class="cover-placeholder" tabindex="0">Click then ⌘V / Ctrl+V to paste</div>
-
-
-    <div id="msg" style="display:none"></div>
-
-    <button class="btn-primary" id="add-btn">Add to Library</button>
   </div>
 
   <script src="panel.js"></script>
