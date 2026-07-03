@@ -257,10 +257,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $coverData = saveBase64AsJpg($coverData, $id) ?: $coverData;
         }
         $info = fetchVideoInfo($url, $coverData ? null : $id);
+        $bodyTitle = trim($body['title'] ?? '');
         $video = [
             'id'         => $id,
             'url'        => $url,
-            'title'      => $info['title'] ?? $url,
+            'title'      => $bodyTitle ?: ($info['title'] ?? $url),
             'cover'      => $coverData ?: $info['cover'],
             'tags'       => array_values(array_unique($tags)),
             'rating'     => 0,

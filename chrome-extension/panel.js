@@ -97,6 +97,7 @@ function setCover(dataUrl) {
 
 function setUrl(url) {
   $('url').value = url || '';
+  $('title').value = '';
   setCover(null);
   hideMsg();
 }
@@ -143,6 +144,7 @@ async function fetchMeta() {
     if (res.exists) showMsg(`Already in library: ${res.existing_title}`, 'error');
     if (res.cover) setCover(res.cover);
     else if (!res.exists) showMsg('No cover image found', 'error');
+    if (res.title && !$('title').value) $('title').value = res.title;
   } catch(e) {
     showMsg('Error: ' + e.message, 'error');
   }
@@ -158,11 +160,13 @@ async function addVideo() {
     const res = await apiFetch({
       action: 'add',
       url,
+      title: $('title').value.trim() || undefined,
       tags: [...selectedTags],
       cover_data: coverData || undefined,
     });
     if (res.success) {
       showMsg(`Added: ${res.video.title}`, 'success');
+      $('title').value = '';
       setCover(null);
       selectedTags.clear();
       renderTags();
@@ -218,6 +222,7 @@ async function init() {
   $('add-btn').addEventListener('click', addVideo);
   $('clear-cover').addEventListener('click', () => setCover(null));
   $('url').addEventListener('keydown', e => { if (e.key === 'Enter') addVideo(); });
+  $('title').addEventListener('keydown', e => { if (e.key === 'Enter') addVideo(); });
 
   // Paste cover image
   const placeholder = $('cover-placeholder');

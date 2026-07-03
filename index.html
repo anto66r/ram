@@ -499,12 +499,19 @@
 
     function AddVideoModal({ labels, onClose, onAdded, onLabelAdded }) {
       const [url, setUrl] = useState('');
+      const [title, setTitle] = useState('');
       const [localLabels, setLocalLabels] = useState(labels);
       const [selectedTags, setSelectedTags] = useState([]);
       const [cover, setCover] = useState(null);
       const [loading, setLoading] = useState(false);
       const [fetching, setFetching] = useState(false);
       const [error, setError] = useState('');
+
+      useEffect(() => {
+        const handler = (e) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', handler);
+        return () => document.removeEventListener('keydown', handler);
+      }, []);
 
       const handleFetch = async () => {
         const trimmed = url.trim();
@@ -514,6 +521,7 @@
         const res = await apiFetch({ action: 'fetch_meta', url: trimmed });
         if (res.exists) setError(`Already in library: ${res.existing_title}`);
         if (res.cover) setCover(res.cover);
+        if (res.title && !title) setTitle(res.title);
         setFetching(false);
       };
 
@@ -530,7 +538,13 @@
         setLoading(true);
         setError('');
         try {
-          const res = await apiFetch({ action: 'add', url: trimmed, tags: selectedTags, cover_data: cover || undefined });
+          const res = await apiFetch({
+            action: 'add',
+            url: trimmed,
+            title: title.trim() || undefined,
+            tags: selectedTags,
+            cover_data: cover || undefined,
+          });
           if (res.success) {
             onAdded(res.video);
             onClose();
@@ -566,6 +580,16 @@
                 </button>
               </div>
             </div>
+            <div className="field">
+              <label>Title</label>
+              <input
+                type="text"
+                placeholder="Video title…"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                onKeyDown={handleKey}
+              />
+            </div>
             <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
               <div style={{ flex: '0 0 48%' }}>
                 <PasteZone cover={cover} onCover={setCover} />
@@ -582,7 +606,7 @@
                   <button className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
                   <button className="btn btn-primary" onClick={handleAdd} disabled={loading}>
                     {loading && <span className="spinner" />}
-                    {loading ? 'Fetching…' : 'Add Video'}
+                    {loading ? 'Adding…' : 'Add Video'}
                   </button>
                 </div>
               </div>
