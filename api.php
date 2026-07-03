@@ -22,18 +22,56 @@ function saveData($file, $data) {
     file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 }
 
-function curlGet($url) {
+function curlGet($url, $extraHeaders = []) {
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_TIMEOUT        => 10,
-        CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; VideoLibrary/1.0)',
+        CURLOPT_MAXREDIRS      => 5,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_ENCODING       => '',
+        CURLOPT_HTTPHEADER     => array_merge([
+            'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language: en-US,en;q=0.9',
+            'Cache-Control: no-cache',
+        ], $extraHeaders),
     ]);
     $result = curl_exec($ch);
     curl_close($ch);
     return $result ?: null;
+}
+
+function parseMetaTags($html) {
+    $result = ['json_ld' => []];
+    $dom = new DOMDocument();
+    libxml_use_internal_errors(true);
+    @$dom->loadHTML('<?xml encoding="UTF-8">' . $html);
+    libxml_clear_errors();
+    $xpath = new DOMXPath($dom);
+
+    foreach ($xpath->query('//meta') as $meta) {
+        $key = $meta->getAttribute('property') ?: $meta->getAttribute('name');
+        $content = $meta->getAttribute('content');
+        if ($key !== '' && $content !== '') {
+            $result[strtolower($key)] = html_entity_decode($content, ENT_QUOTES, 'UTF-8');
+        }
+    }
+
+    $titles = $xpath->query('//title');
+    if ($titles->length > 0) {
+        $result['page_title'] = html_entity_decode(trim($titles->item(0)->textContent), ENT_QUOTES, 'UTF-8');
+    }
+
+    foreach ($xpath->query('//script[@type="application/ld+json"]') as $script) {
+        $ld = @json_decode($script->textContent, true);
+        if (!$ld) continue;
+        $items = isset($ld['@graph']) ? $ld['@graph'] : [$ld];
+        foreach ($items as $item) $result['json_ld'][] = $item;
+    }
+
+    return $result;
 }
 
 function ensureImagesDir() {
@@ -68,9 +106,11 @@ function downloadImageAsBase64($url) {
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_MAXREDIRS      => 5,
         CURLOPT_TIMEOUT        => 15,
-        CURLOPT_USERAGENT      => 'Mozilla/5.0 (compatible; VideoLibrary/1.0)',
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_HTTPHEADER     => ['Accept: image/webp,image/apng,image/*,*/*;q=0.8'],
     ]);
     $data = curl_exec($ch);
     $mime = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
@@ -94,10 +134,53 @@ function deleteImageFile($cover) {
     }
 }
 
+function resolveUrl($imageUrl, $pageUrl) {
+    if (preg_match('/^https?:\/\//', $imageUrl)) return $imageUrl;
+    $p = parse_url($pageUrl);
+    $base = $p['scheme'] . '://' . $p['host'];
+    if (str_starts_with($imageUrl, '//')) return $p['scheme'] . ':' . $imageUrl;
+    return $base . '/' . ltrim($imageUrl, '/');
+}
+
+function extractFromParsed($parsed, $pageUrl, $saveOrBase64) {
+    $info = ['cover' => null, 'title' => null];
+
+    // Title: og:title > twitter:title > page <title>
+    $info['title'] = $parsed['og:title']
+        ?? $parsed['twitter:title']
+        ?? $parsed['page_title']
+        ?? null;
+
+    // Image: og:image > twitter:image > twitter:image:src > JSON-LD
+    $imageUrl = $parsed['og:image']
+        ?? $parsed['twitter:image']
+        ?? $parsed['twitter:image:src']
+        ?? null;
+
+    if (!$imageUrl && !empty($parsed['json_ld'])) {
+        foreach ($parsed['json_ld'] as $ld) {
+            $candidate = $ld['thumbnailUrl'] ?? null;
+            if (!$candidate && isset($ld['image'])) {
+                $img = $ld['image'];
+                $candidate = is_array($img) ? ($img['url'] ?? $img[0] ?? null) : $img;
+            }
+            if ($candidate) { $imageUrl = $candidate; break; }
+        }
+    }
+
+    if ($imageUrl) {
+        $imageUrl = resolveUrl($imageUrl, $pageUrl);
+        $info['cover'] = $saveOrBase64($imageUrl);
+    }
+
+    return $info;
+}
+
 function fetchVideoInfo($url, $id = null) {
     $info = ['cover' => null, 'title' => null];
 
     $saveOrBase64 = function($imageUrl) use ($id) {
+        if (!$imageUrl) return null;
         if ($id) return downloadImageAsJpg($imageUrl, $id);
         return downloadImageAsBase64($imageUrl);
     };
@@ -109,7 +192,9 @@ function fetchVideoInfo($url, $id = null) {
             "https://www.youtube.com/oembed?url=" . urlencode($url) . "&format=json"
         ), true);
         $info['title'] = $oembed['title'] ?? null;
-        $info['cover'] = $saveOrBase64("https://img.youtube.com/vi/{$videoId}/hqdefault.jpg");
+        // maxresdefault first, fall back to hqdefault
+        $info['cover'] = $saveOrBase64("https://img.youtube.com/vi/{$videoId}/maxresdefault.jpg")
+            ?: $saveOrBase64("https://img.youtube.com/vi/{$videoId}/hqdefault.jpg");
         return $info;
     }
 
@@ -119,77 +204,21 @@ function fetchVideoInfo($url, $id = null) {
             "https://vimeo.com/api/oembed.json?url=" . urlencode($url)
         ), true);
         $info['title'] = $oembed['title'] ?? null;
-        $info['cover'] = $saveOrBase64($oembed['thumbnail_url'] ?? null);
-        return $info;
-    }
-
-    // xhamster
-    if (preg_match('/xhamster\.com\/videos\/[^\/]+-(\d+)/', $url, $m)) {
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_TIMEOUT        => 15,
-            CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_HTTPHEADER     => ['Accept-Language: en-US,en;q=0.9', 'Accept: text/html'],
-        ]);
-        $html = curl_exec($ch);
-        curl_close($ch);
-        if ($html) {
-            // Try JSON-LD first (VideoObject with thumbnailUrl)
-            if (preg_match_all('/<script[^>]+type=["\']application\/ld\+json["\'][^>]*>(.*?)<\/script>/is', $html, $scripts)) {
-                foreach ($scripts[1] as $json) {
-                    $ld = @json_decode(trim($json), true);
-                    if ($ld && isset($ld['thumbnailUrl'])) {
-                        $info['title'] = $ld['name'] ?? null;
-                        $info['cover'] = $saveOrBase64($ld['thumbnailUrl']);
-                        return $info;
-                    }
-                }
-            }
-            // Fallback: og:image
-            if (preg_match('/property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']/', $html, $m) ||
-                preg_match('/content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']/', $html, $m)) {
-                $info['cover'] = $saveOrBase64($m[1]);
-            }
-            if (preg_match('/property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']/', $html, $m) ||
-                preg_match('/content=["\']([^"\']+)["\'][^>]+property=["\']og:title["\']/', $html, $m)) {
-                $info['title'] = html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
-            }
+        $thumbUrl = $oembed['thumbnail_url'] ?? null;
+        if ($thumbUrl) {
+            // upgrade to larger size when available
+            $thumbUrl = preg_replace('/_\d+x\d+(\.\w+)$/', '_1280x720$1', $thumbUrl);
         }
+        $info['cover'] = $saveOrBase64($thumbUrl);
         return $info;
     }
 
-    // Generic: parse og:image and og:title
+    // Generic: fetch page and parse with DOMDocument
     $html = curlGet($url);
-    if ($html) {
-        // og:image — handle any quote style and attribute order
-        if (preg_match('/<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\'][^>]*\/?>/i', $html, $m) ||
-            preg_match('/<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\'][^>]*\/?>/i', $html, $m) ||
-            preg_match('/property=["\']og:image["\']\s+content=["\'](https?:\/\/[^"\']+)["\']/', $html, $m) ||
-            preg_match('/content=["\'](https?:\/\/[^"\']+)["\'][^>]+property=["\']og:image["\']/', $html, $m)) {
-            $imageUrl = $m[1];
-            // resolve relative URLs
-            if (!preg_match('/^https?:\/\//', $imageUrl)) {
-                $parsed = parse_url($url);
-                $base = $parsed['scheme'] . '://' . $parsed['host'];
-                $imageUrl = $base . '/' . ltrim($imageUrl, '/');
-            }
-            $info['cover'] = $saveOrBase64($imageUrl);
-        }
-        // og:title
-        if (preg_match('/<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)["\']/', $html, $m) ||
-            preg_match('/<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:title["\']/', $html, $m)) {
-            $info['title'] = html_entity_decode($m[1], ENT_QUOTES, 'UTF-8');
-        }
-        // fallback: <title>
-        if (!$info['title'] && preg_match('/<title[^>]*>([^<]+)<\/title>/i', $html, $m)) {
-            $info['title'] = html_entity_decode(trim($m[1]), ENT_QUOTES, 'UTF-8');
-        }
-    }
+    if (!$html) return $info;
 
-    return $info;
+    $parsed = parseMetaTags($html);
+    return extractFromParsed($parsed, $url, $saveOrBase64);
 }
 
 $action = $_GET['action'] ?? null;
