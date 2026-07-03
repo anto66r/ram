@@ -221,8 +221,7 @@ async function init() {
   $('fetch-btn').addEventListener('click', fetchMeta);
   $('add-btn').addEventListener('click', addVideo);
   $('clear-cover').addEventListener('click', () => setCover(null));
-  $('url').addEventListener('keydown', e => { if (e.key === 'Enter') addVideo(); });
-  $('title').addEventListener('keydown', e => { if (e.key === 'Enter') addVideo(); });
+  $('main').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); addVideo(); } });
 
   // Paste cover image
   const placeholder = $('cover-placeholder');

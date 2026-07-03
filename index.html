@@ -557,11 +557,16 @@
         setLoading(false);
       };
 
-      const handleKey = (e) => { if (e.key === 'Enter') handleAdd(); };
+      const handleModalKey = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handleAdd();
+        }
+      };
 
       return (
         <div className="overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-          <div className="modal">
+          <div className="modal" onKeyDown={handleModalKey}>
             <h2>Add Video</h2>
             <div className="field">
               <label>URL</label>
@@ -571,7 +576,6 @@
                   placeholder="https://..."
                   value={url}
                   onChange={e => setUrl(e.target.value)}
-                  onKeyDown={handleKey}
                   autoFocus
                   style={{ flex: 1 }}
                 />
@@ -587,7 +591,6 @@
                 placeholder="Video title…"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                onKeyDown={handleKey}
               />
             </div>
             <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
