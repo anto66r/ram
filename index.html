@@ -290,6 +290,23 @@
     }
     .add-label-row input:focus { border-color: #3b82f6; }
 
+    /* Sort group */
+    .sort-group { display: flex; margin-left: auto; }
+    .sort-btn {
+      padding: 4px 12px;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #666;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .sort-btn:first-child { border-radius: 6px 0 0 6px; }
+    .sort-btn:last-child { border-radius: 0 6px 6px 0; }
+    .sort-btn + .sort-btn { border-left: none; }
+    .sort-btn.active { background: #2a2a2a; color: #ddd; border-color: #555; }
+    .sort-btn:hover:not(.active) { color: #bbb; }
+
     /* Stars */
     .star-rating { display: flex; gap: 1px; line-height: 1; }
     .star { font-size: 1rem; color: #444; cursor: pointer; transition: color 0.1s; user-select: none; }
@@ -801,6 +818,7 @@
       const [labels, setLabels] = useState([]);
       const [activeTab, setActiveTab] = useState(null);
       const [filterTag, setFilterTag] = useState(null);
+      const [sortBy, setSortBy] = useState('date');
       const [modal, setModal] = useState(null); // 'add' | 'labels' | {type:'editTags', video}
       const [toast, setToast] = useState(null);
       const [loading, setLoading] = useState(true);
@@ -858,6 +876,14 @@
         ? [...new Set(tabVideos.flatMap(v => v.tags || []))].filter(l => l !== activeTab)
         : [];
 
+      const sortedVideos = [...filteredVideos].sort((a, b) => {
+        if (sortBy === 'alpha') return (a.title || '').localeCompare(b.title || '');
+        if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
+        // date: newest first; fall back to original order for legacy items without created_at
+        if (a.created_at && b.created_at) return new Date(b.created_at) - new Date(a.created_at);
+        return 0;
+      });
+
       return (
         <>
           <header className="header">
@@ -882,34 +908,41 @@
             ))}
           </div>
 
-          {activeTab && subLabels.length > 0 && (
-            <div className="filter-bar">
-              <span>Filter:</span>
-              <button
-                className={`tag-pill ${!filterTag ? 'active' : ''}`}
-                onClick={() => setFilterTag(null)}
-              >All</button>
-              {subLabels.map(label => (
+          <div className="filter-bar">
+            {activeTab && subLabels.length > 0 && (
+              <>
+                <span>Filter:</span>
                 <button
-                  key={label}
-                  className={`tag-pill ${filterTag === label ? 'active' : ''}`}
-                  onClick={() => setFilterTag(filterTag === label ? null : label)}
-                >{label}</button>
-              ))}
+                  className={`tag-pill ${!filterTag ? 'active' : ''}`}
+                  onClick={() => setFilterTag(null)}
+                >All</button>
+                {subLabels.map(label => (
+                  <button
+                    key={label}
+                    className={`tag-pill ${filterTag === label ? 'active' : ''}`}
+                    onClick={() => setFilterTag(filterTag === label ? null : label)}
+                  >{label}</button>
+                ))}
+              </>
+            )}
+            <div className="sort-group">
+              <button className={`sort-btn ${sortBy === 'date' ? 'active' : ''}`} onClick={() => setSortBy('date')}>Date</button>
+              <button className={`sort-btn ${sortBy === 'alpha' ? 'active' : ''}`} onClick={() => setSortBy('alpha')}>A–Z</button>
+              <button className={`sort-btn ${sortBy === 'rating' ? 'active' : ''}`} onClick={() => setSortBy('rating')}>Rating</button>
             </div>
-          )}
+          </div>
 
           <div className="grid">
             {loading && (
               <div className="empty"><p><span className="spinner" /> Loading…</p></div>
             )}
-            {!loading && filteredVideos.length === 0 && (
+            {!loading && sortedVideos.length === 0 && (
               <div className="empty">
                 <h2>{activeTab || filterTag ? `No videos found` : 'No videos yet'}</h2>
                 <p>{!activeTab && !filterTag && 'Click "+ Add Video" to get started.'}</p>
               </div>
             )}
-            {filteredVideos.map(video => (
+            {sortedVideos.map(video => (
               <VideoCard
                 key={video.id}
                 video={video}
