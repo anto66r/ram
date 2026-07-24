@@ -367,6 +367,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'imagick'      => class_exists('Imagick'),
         ]);
 
+    } elseif ($postAction === 'debug_meta') {
+        $url = trim($body['url'] ?? '');
+        $html = curlGet($url);
+        if (!$html) {
+            echo json_encode(['error' => 'page fetch failed', 'html_len' => 0]);
+            exit;
+        }
+        $parsed = parseMetaTags($html);
+        echo json_encode([
+            'html_len'      => strlen($html),
+            'og:image'      => $parsed['og:image'] ?? null,
+            'twitter:image' => $parsed['twitter:image'] ?? null,
+            'og:title'      => $parsed['og:title'] ?? null,
+            'json_ld_count' => count($parsed['json_ld']),
+        ]);
+
     } elseif ($postAction === 'fetch_meta') {
         $url = trim($body['url'] ?? '');
         if (!$url) { echo json_encode(['error' => 'URL required']); exit; }
