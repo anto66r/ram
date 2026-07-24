@@ -341,6 +341,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         saveData($dataFile, $data);
         echo json_encode(['success' => true]);
 
+    } elseif ($postAction === 'debug_image') {
+        $url = trim($body['url'] ?? '');
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS      => 5,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_HTTPHEADER     => ['Accept: image/webp,image/apng,image/*,*/*;q=0.8'],
+        ]);
+        $data = curl_exec($ch);
+        $info = curl_getinfo($ch);
+        $err  = curl_error($ch);
+        curl_close($ch);
+        echo json_encode([
+            'http_code'    => $info['http_code'] ?? null,
+            'content_type' => $info['content_type'] ?? null,
+            'size'         => $data ? strlen($data) : 0,
+            'curl_error'   => $err,
+            'gd_has_webp'  => function_exists('imagecreatefromwebp'),
+            'gd_info'      => function_exists('gd_info') ? gd_info() : null,
+            'imagick'      => class_exists('Imagick'),
+        ]);
+
     } elseif ($postAction === 'fetch_meta') {
         $url = trim($body['url'] ?? '');
         if (!$url) { echo json_encode(['error' => 'URL required']); exit; }
