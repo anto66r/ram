@@ -375,12 +375,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         $parsed = parseMetaTags($html);
+        $ogPos = strpos($html, 'og:image');
         echo json_encode([
-            'html_len'      => strlen($html),
-            'og:image'      => $parsed['og:image'] ?? null,
-            'twitter:image' => $parsed['twitter:image'] ?? null,
-            'og:title'      => $parsed['og:title'] ?? null,
-            'json_ld_count' => count($parsed['json_ld']),
+            'html_len'         => strlen($html),
+            'og:image'         => $parsed['og:image'] ?? null,
+            'twitter:image'    => $parsed['twitter:image'] ?? null,
+            'og:title'         => $parsed['og:title'] ?? null,
+            'page_title'       => $parsed['page_title'] ?? null,
+            'json_ld_count'    => count($parsed['json_ld']),
+            'raw_has_og_image' => $ogPos !== false,
+            'raw_snippet'      => $ogPos !== false ? substr($html, max(0, $ogPos - 80), 300) : substr($html, 0, 300),
         ]);
 
     } elseif ($postAction === 'fetch_meta') {
