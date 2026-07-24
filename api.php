@@ -186,14 +186,16 @@ function resolveUrl($imageUrl, $pageUrl) {
     return $base . '/' . ltrim($imageUrl, '/');
 }
 
-function extractFromParsed($parsed, $pageUrl, $saveOrBase64) {
-    $info = ['cover' => null, 'title' => null];
-
-    // Title: og:title > twitter:title > page <title>
-    $info['title'] = $parsed['og:title']
+function extractTitle($parsed) {
+    // og:title > twitter:title > page <title>
+    return $parsed['og:title']
         ?? $parsed['twitter:title']
         ?? $parsed['page_title']
         ?? null;
+}
+
+function extractFromParsed($parsed, $pageUrl, $saveOrBase64) {
+    $info = ['cover' => null, 'title' => extractTitle($parsed)];
 
     // Image: og:image > twitter:image > twitter:image:src > JSON-LD
     $imageUrl = $parsed['og:image']
@@ -220,7 +222,7 @@ function extractFromParsed($parsed, $pageUrl, $saveOrBase64) {
     return $info;
 }
 
-function fetchVideoInfo($url, $id = null) {
+function fetchVideoInfo($url, $id = null, $titleOnly = false) {
     $info = ['cover' => null, 'title' => null];
 
     $saveOrBase64 = function($imageUrl) use ($id) {
@@ -236,9 +238,11 @@ function fetchVideoInfo($url, $id = null) {
             "https://www.youtube.com/oembed?url=" . urlencode($url) . "&format=json"
         ), true);
         $info['title'] = $oembed['title'] ?? null;
-        // maxresdefault first, fall back to hqdefault
-        $info['cover'] = $saveOrBase64("https://img.youtube.com/vi/{$videoId}/maxresdefault.jpg")
-            ?: $saveOrBase64("https://img.youtube.com/vi/{$videoId}/hqdefault.jpg");
+        if (!$titleOnly) {
+            // maxresdefault first, fall back to hqdefault
+            $info['cover'] = $saveOrBase64("https://img.youtube.com/vi/{$videoId}/maxresdefault.jpg")
+                ?: $saveOrBase64("https://img.youtube.com/vi/{$videoId}/hqdefault.jpg");
+        }
         return $info;
     }
 
@@ -248,12 +252,14 @@ function fetchVideoInfo($url, $id = null) {
             "https://vimeo.com/api/oembed.json?url=" . urlencode($url)
         ), true);
         $info['title'] = $oembed['title'] ?? null;
-        $thumbUrl = $oembed['thumbnail_url'] ?? null;
-        if ($thumbUrl) {
-            // upgrade to larger size when available
-            $thumbUrl = preg_replace('/_\d+x\d+(\.\w+)$/', '_1280x720$1', $thumbUrl);
+        if (!$titleOnly) {
+            $thumbUrl = $oembed['thumbnail_url'] ?? null;
+            if ($thumbUrl) {
+                // upgrade to larger size when available
+                $thumbUrl = preg_replace('/_\d+x\d+(\.\w+)$/', '_1280x720$1', $thumbUrl);
+            }
+            $info['cover'] = $saveOrBase64($thumbUrl);
         }
-        $info['cover'] = $saveOrBase64($thumbUrl);
         return $info;
     }
 
@@ -262,6 +268,10 @@ function fetchVideoInfo($url, $id = null) {
     if (!$html) return $info;
 
     $parsed = parseMetaTags($html);
+    if ($titleOnly) {
+        $info['title'] = extractTitle($parsed);
+        return $info;
+    }
     return extractFromParsed($parsed, $url, $saveOrBase64);
 }
 
@@ -270,6 +280,34 @@ $action = $_GET['action'] ?? null;
 // GET list
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'list') {
     echo json_encode(loadData($dataFile));
+    exit;
+}
+
+// GET refetch_titles: fill in a title for any video that doesn't have a real
+// one yet (title missing or still just the raw URL). Existing titles are
+// left untouched. Meant to be hit directly from a browser.
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && $action === 'refetch_titles') {
+    ignore_user_abort(true);
+    if (function_exists('set_time_limit')) @set_time_limit(0);
+
+    $data = loadData($dataFile);
+    $checked = 0;
+    $updated = 0;
+    foreach ($data['videos'] as &$video) {
+        $url = trim($video['url'] ?? '');
+        $title = trim($video['title'] ?? '');
+        if ($title !== '' && $title !== $url) continue;
+
+        $checked++;
+        $info = fetchVideoInfo($url, null, true);
+        if (!empty($info['title'])) {
+            $video['title'] = $info['title'];
+            $updated++;
+        }
+    }
+    unset($video);
+    saveData($dataFile, $data);
+    echo json_encode(['success' => true, 'checked' => $checked, 'updated' => $updated]);
     exit;
 }
 
