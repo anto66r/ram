@@ -80,13 +80,57 @@ function ensureImagesDir() {
     return $dir;
 }
 
+function detectImageExt($imageData) {
+    $info = @getimagesizefromstring($imageData);
+    $mime = $info['mime'] ?? null;
+    switch ($mime) {
+        case 'image/webp': return 'webp';
+        case 'image/png':  return 'png';
+        case 'image/gif':  return 'gif';
+        default:           return 'jpg';
+    }
+}
+
 function saveImageAsJpg($imageData, $id) {
     $dir = ensureImagesDir();
     $img = @imagecreatefromstring($imageData);
-    if (!$img) return null;
-    $path = "images/{$id}.jpg";
-    imagejpeg($img, $dir . "/{$id}.jpg", 85);
-    imagedestroy($img);
+
+    // Some GD builds can't decode WebP via imagecreatefromstring; retry with
+    // the dedicated decoder before giving up on the image.
+    if (!$img && function_exists('imagecreatefromwebp')) {
+        $tmp = tempnam(sys_get_temp_dir(), 'img');
+        file_put_contents($tmp, $imageData);
+        $img = @imagecreatefromwebp($tmp);
+        unlink($tmp);
+    }
+
+    if ($img) {
+        $path = "images/{$id}.jpg";
+        imagejpeg($img, $dir . "/{$id}.jpg", 85);
+        imagedestroy($img);
+        return $path;
+    }
+
+    // Imagick often supports formats GD's build lacks (e.g. WebP without libwebp).
+    if (class_exists('Imagick')) {
+        try {
+            $im = new Imagick();
+            $im->readImageBlob($imageData);
+            $im->setImageFormat('jpeg');
+            $path = "images/{$id}.jpg";
+            $im->writeImage($dir . "/{$id}.jpg");
+            $im->destroy();
+            return $path;
+        } catch (Exception $e) {
+            // fall through to raw-bytes fallback below
+        }
+    }
+
+    // Last resort: store the original bytes so the cover isn't silently
+    // dropped, using the real extension so the served Content-Type matches.
+    $ext = detectImageExt($imageData);
+    $path = "images/{$id}.{$ext}";
+    if (file_put_contents($dir . "/{$id}.{$ext}", $imageData) === false) return null;
     return $path;
 }
 
